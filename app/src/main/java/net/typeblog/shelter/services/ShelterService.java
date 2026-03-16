@@ -77,7 +77,13 @@ public class ShelterService extends Service {
         public void getApps(IGetAppsCallback callback, boolean showAll) {
             new Thread(() -> {
                 int pmFlags = PackageManager.MATCH_DISABLED_COMPONENTS | PackageManager.MATCH_UNINSTALLED_PACKAGES;
-                List<ApplicationInfoWrapper> list = mPackageManager.getInstalledApplications(pmFlags)
+                List<ApplicationInfo> rawList;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    rawList = mPackageManager.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(pmFlags));
+                } else {
+                    rawList = mPackageManager.getInstalledApplications(pmFlags);
+                }
+                List<ApplicationInfoWrapper> list = rawList
                         .stream()
                         .filter((it) -> !it.packageName.equals(getPackageName()))
                         .filter((it) -> {
@@ -317,7 +323,7 @@ public class ShelterService extends Service {
         // all clients have disconnected.
         // This helps to ensure no notification is left when the Shelter activity
         // is closed.
-        stopForeground(true);
+        stopForeground(STOP_FOREGROUND_REMOVE);
         return false;
     }
 

@@ -12,6 +12,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Build;
 import android.os.IBinder;
 
 import androidx.annotation.Nullable;
@@ -74,7 +75,11 @@ public class FreezeService extends Service {
             mAlarmManager.set(AlarmManager.RTC_WAKEUP,
                     System.currentTimeMillis() + ((long) SettingsManager.getInstance().getAutoFreezeDelay()) * 1000,
                     null, mFreezeWork, null);
-            registerReceiver(mUnlockReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(mUnlockReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON), RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(mUnlockReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON));
+            }
         }
     };
 
@@ -131,7 +136,11 @@ public class FreezeService extends Service {
         super.onCreate();
         mAlarmManager = getSystemService(AlarmManager.class);
         // This is the only thing that we do
-        registerReceiver(mLockReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(mLockReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF), RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(mLockReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+        }
         // Use foreground notification to keep this service alive until screen is locked
         setForeground();
     }

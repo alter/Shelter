@@ -7,6 +7,9 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.media.ThumbnailUtils;
+import android.os.Build;
+import android.os.CancellationSignal;
+import android.util.Size;
 import android.net.Uri;
 import android.os.Environment;
 import android.os.Handler;
@@ -253,6 +256,7 @@ public class FileShuttleService extends Service {
             result.moveToFirst();
             try {
                 int index = result.getColumnIndex(MediaStore.Images.Thumbnails.DATA);
+                if (index < 0) return loadBitmapThumbnail(fullPath, sizeHint);
                 return getContentResolver().openFileDescriptor(
                         Uri.fromFile(new File(result.getString(index))), "r");
             } catch (FileNotFoundException e) {
@@ -262,11 +266,17 @@ public class FileShuttleService extends Service {
     }
 
     private ParcelFileDescriptor loadVideoThumbnail(String fullPath) {
-        // The MediaStore interface for video thumbnails just do not work at all
-        // It can't even retrieve video IDs from the database
-        // Anyway, use this as a temporary fix.
-        // TODO: Figure out how to use the MediaStore interface with videos
-        Bitmap bmp = ThumbnailUtils.createVideoThumbnail(fullPath, MediaStore.Video.Thumbnails.MINI_KIND);
+        Bitmap bmp;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                bmp = ThumbnailUtils.createVideoThumbnail(
+                        new File(fullPath), new Size(512, 384), new CancellationSignal());
+            } catch (IOException e) {
+                return null;
+            }
+        } else {
+            bmp = ThumbnailUtils.createVideoThumbnail(fullPath, MediaStore.Video.Thumbnails.MINI_KIND);
+        }
         return bitmapToFd(bmp);
     }
 
@@ -310,9 +320,14 @@ public class FileShuttleService extends Service {
         // Notify the media scanner to scan the file as needed
         // This has to be done AFTER file creation
         if (mimeType != null && (mimeType.startsWith("image/") || mimeType.startsWith("video/"))) {
-            Intent intent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-            intent.setData(Uri.fromFile(f));
-            sendBroadcast(intent);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                android.media.MediaScannerConnection.scanFile(
+                        this, new String[]{f.getAbsolutePath()}, new String[]{mimeType}, null);
+            } else {
+                Intent intent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+                intent.setData(Uri.fromFile(f));
+                sendBroadcast(intent);
+            }
         }
     }
 }
