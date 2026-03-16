@@ -216,10 +216,25 @@ public class DummyActivity extends Activity {
 
             switch (status) {
                 case PackageInstaller.STATUS_PENDING_USER_ACTION:
+                    Intent confirmIntent;
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        startActivity(intent.getExtras().getParcelable(Intent.EXTRA_INTENT, Intent.class));
+                        confirmIntent = intent.getExtras().getParcelable(Intent.EXTRA_INTENT, Intent.class);
                     } else {
-                        startActivity((Intent) intent.getExtras().get(Intent.EXTRA_INTENT));
+                        confirmIntent = (Intent) intent.getExtras().get(Intent.EXTRA_INTENT);
+                    }
+                    // Android 16 (API 36) introduces Intent redirection security hardening
+                    // that blocks launching sub-intents from extras by default.
+                    // PackageInstaller confirmation intents are legitimate and need opt-out.
+                    if (Build.VERSION.SDK_INT >= 36 && confirmIntent != null) {
+                        try {
+                            confirmIntent.getClass().getDeclaredMethod("removeLaunchSecurityProtection")
+                                    .invoke(confirmIntent);
+                        } catch (Exception ignored) {
+                            // Method may not exist on all implementations
+                        }
+                    }
+                    if (confirmIntent != null) {
+                        startActivity(confirmIntent);
                     }
                     break;
                 case PackageInstaller.STATUS_SUCCESS:
