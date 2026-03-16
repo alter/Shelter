@@ -53,6 +53,7 @@ public class FileShuttleService extends Service {
 
         @Override
         public List<Map<String, Serializable>> loadFiles(String path) {
+            verifyCallerUid();
             resetSuicideTask();
             ArrayList<Map<String, Serializable>> ret = new ArrayList<>();
             File f = new File(resolvePath(path));
@@ -66,6 +67,7 @@ public class FileShuttleService extends Service {
 
         @Override
         public Map<String, Serializable> loadFileMeta(String path) {
+            verifyCallerUid();
             resetSuicideTask();
             File f = new File(resolvePath(path));
             HashMap<String, Serializable> map = new HashMap<>();
@@ -102,6 +104,7 @@ public class FileShuttleService extends Service {
 
         @Override
         public ParcelFileDescriptor openFile(String path, String mode) {
+            verifyCallerUid();
             resetSuicideTask();
             File f = new File(resolvePath(path));
             int numericMode = ParcelFileDescriptor.parseMode(mode);
@@ -128,6 +131,7 @@ public class FileShuttleService extends Service {
 
         @Override
         public ParcelFileDescriptor openThumbnail(String path, Point sizeHint) {
+            verifyCallerUid();
             resetSuicideTask();
             String fullPath = resolvePath(path);
             String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(
@@ -148,6 +152,7 @@ public class FileShuttleService extends Service {
 
         @Override
         public String createFile(String path, String mimeType, String displayName) {
+            verifyCallerUid();
             resetSuicideTask();
             File f;
             String fullPath = path + "/" + displayName;
@@ -181,6 +186,7 @@ public class FileShuttleService extends Service {
 
         @Override
         public String deleteFile(String path) {
+            verifyCallerUid();
             resetSuicideTask();
             File f = new File(resolvePath(path));
             f.delete();
@@ -189,6 +195,7 @@ public class FileShuttleService extends Service {
 
         @Override
         public boolean isChildOf(String parent, String child) {
+            verifyCallerUid();
             File parentFile = new File(resolvePath(parent));
             File childFile = new File(resolvePath(child));
             String parentPath = parentFile.getAbsolutePath();
@@ -201,11 +208,26 @@ public class FileShuttleService extends Service {
         }
     };
 
+    // UID of the first bound client — only this UID may call service methods
+    private int mBoundCallerUid = -1;
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
         resetSuicideTask();
+        // Record the first caller's UID as the authorized one
+        if (mBoundCallerUid == -1) {
+            mBoundCallerUid = android.os.Binder.getCallingUid();
+        }
         return mStub;
+    }
+
+    private void verifyCallerUid() {
+        int callingUid = android.os.Binder.getCallingUid();
+        if (mBoundCallerUid != -1 && callingUid != mBoundCallerUid
+                && callingUid != android.os.Process.myUid()) {
+            throw new SecurityException("Unauthorized caller UID: " + callingUid);
+        }
     }
 
     @Override
@@ -215,11 +237,25 @@ public class FileShuttleService extends Service {
     }
 
     private String resolvePath(String path) {
+        String resolved;
         if (path.startsWith(CrossProfileDocumentsProvider.DUMMY_ROOT)) {
-            return path.replaceFirst(CrossProfileDocumentsProvider.DUMMY_ROOT,
+            resolved = path.replaceFirst(CrossProfileDocumentsProvider.DUMMY_ROOT,
                     Environment.getExternalStorageDirectory().getAbsolutePath());
         } else {
-            return path;
+            resolved = path;
+        }
+
+        // Prevent path traversal attacks: canonicalize and verify the resolved path
+        // stays within external storage boundaries
+        try {
+            String canonical = new File(resolved).getCanonicalPath();
+            String storageRoot = Environment.getExternalStorageDirectory().getCanonicalPath();
+            if (!canonical.startsWith(storageRoot + "/") && !canonical.equals(storageRoot)) {
+                throw new SecurityException("Path traversal detected: " + path);
+            }
+            return canonical;
+        } catch (IOException e) {
+            throw new SecurityException("Cannot resolve path: " + path, e);
         }
     }
 
@@ -237,31 +273,32 @@ public class FileShuttleService extends Service {
     private ParcelFileDescriptor loadImageThumbnail(String fullPath, Point sizeHint) {
         int id = Utility.getMediaStoreId(FileShuttleService.this, fullPath);
         if (id == -1) {
-            // Fallback to directly loading thumbnail from file
             return loadBitmapThumbnail(fullPath, sizeHint);
         }
-        Cursor result = MediaStore.Images.Thumbnails.queryMiniThumbnail(
-                getContentResolver(), id, MediaStore.Images.Thumbnails.MINI_KIND, null);
-        if (result.getCount() == 0) {
-            // If no thumbnail is found, we try to request one first
-            MediaStore.Images.Thumbnails.getThumbnail(
-                    getContentResolver(), id, MediaStore.Images.Thumbnails.MINI_KIND, null);
+        Cursor result = null;
+        try {
             result = MediaStore.Images.Thumbnails.queryMiniThumbnail(
                     getContentResolver(), id, MediaStore.Images.Thumbnails.MINI_KIND, null);
-        }
-        if (result.getCount() == 0) {
-            // Fallback to directly loading thumbnail from file
-            return loadBitmapThumbnail(fullPath, sizeHint);
-        } else {
-            result.moveToFirst();
-            try {
-                int index = result.getColumnIndex(MediaStore.Images.Thumbnails.DATA);
-                if (index < 0) return loadBitmapThumbnail(fullPath, sizeHint);
-                return getContentResolver().openFileDescriptor(
-                        Uri.fromFile(new File(result.getString(index))), "r");
-            } catch (FileNotFoundException e) {
-                return null;
+            if (result == null || result.getCount() == 0) {
+                if (result != null) result.close();
+                // If no thumbnail is found, we try to request one first
+                MediaStore.Images.Thumbnails.getThumbnail(
+                        getContentResolver(), id, MediaStore.Images.Thumbnails.MINI_KIND, null);
+                result = MediaStore.Images.Thumbnails.queryMiniThumbnail(
+                        getContentResolver(), id, MediaStore.Images.Thumbnails.MINI_KIND, null);
             }
+            if (result == null || result.getCount() == 0) {
+                return loadBitmapThumbnail(fullPath, sizeHint);
+            }
+            result.moveToFirst();
+            int index = result.getColumnIndex(MediaStore.Images.Thumbnails.DATA);
+            if (index < 0) return loadBitmapThumbnail(fullPath, sizeHint);
+            return getContentResolver().openFileDescriptor(
+                    Uri.fromFile(new File(result.getString(index))), "r");
+        } catch (FileNotFoundException e) {
+            return null;
+        } finally {
+            if (result != null) result.close();
         }
     }
 
@@ -309,8 +346,14 @@ public class FileShuttleService extends Service {
                 os.flush();
             } catch (IOException e) {
                 // ...
+            } finally {
+                try {
+                    pair[1].close();
+                } catch (IOException e) {
+                    // Ignore close error
+                }
+                bmp.recycle();
             }
-            bmp.recycle();
         }).start();
 
         return pair[0];

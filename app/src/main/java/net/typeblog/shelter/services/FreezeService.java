@@ -80,8 +80,12 @@ public class FreezeService extends Service {
             } else {
                 registerReceiver(mUnlockReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON));
             }
+            mUnlockReceiverRegistered = true;
         }
     };
+
+    // Track whether mUnlockReceiver is currently registered
+    private boolean mUnlockReceiverRegistered = false;
 
     // The receiver of the screen-on event
     // Cancels the freeze job if the designated delay has not passed
@@ -89,6 +93,7 @@ public class FreezeService extends Service {
         @Override
         public void onReceive(Context context, Intent intent) {
             mAlarmManager.cancel(mFreezeWork);
+            safeUnregisterUnlockReceiver();
         }
     };
 
@@ -107,7 +112,7 @@ public class FreezeService extends Service {
     private AlarmManager.OnAlarmListener mFreezeWork = () -> {
         synchronized (FreezeService.class) {
             // Cancel the unlock receiver first - the delay has passed if this work is executed
-            unregisterReceiver(mUnlockReceiver);
+            safeUnregisterUnlockReceiver();
 
             if (sAppToFreeze.size() > 0) {
                 DevicePolicyManager dpm = getSystemService(DevicePolicyManager.class);
@@ -148,7 +153,20 @@ public class FreezeService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        mAlarmManager.cancel(mFreezeWork);
+        safeUnregisterUnlockReceiver();
         unregisterReceiver(mLockReceiver);
+    }
+
+    private void safeUnregisterUnlockReceiver() {
+        if (mUnlockReceiverRegistered) {
+            try {
+                unregisterReceiver(mUnlockReceiver);
+            } catch (IllegalArgumentException e) {
+                // Receiver was already unregistered
+            }
+            mUnlockReceiverRegistered = false;
+        }
     }
 
     @Nullable
