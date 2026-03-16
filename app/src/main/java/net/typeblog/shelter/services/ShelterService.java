@@ -25,6 +25,8 @@ import net.typeblog.shelter.util.FileProviderProxy;
 import net.typeblog.shelter.util.UriForwardProxy;
 import net.typeblog.shelter.util.Utility;
 
+import android.os.UserManager;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -297,6 +299,31 @@ public class ShelterService extends Service {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R)
                 throw new IllegalStateException("Cross-profile packages support is only available on Android 11 and later");
             mPolicyManager.setCrossProfilePackages(mAdminComponent, new HashSet<>(packages));
+        }
+
+        @Override
+        public int getPermissionGrantState(String packageName, String permission) {
+            if (!mIsProfileOwner)
+                throw new IllegalStateException("Cannot manage permissions without being profile owner");
+            return mPolicyManager.getPermissionGrantState(mAdminComponent, packageName, permission);
+        }
+
+        @Override
+        public boolean setPermissionGrantState(String packageName, String permission, int grantState) {
+            if (!mIsProfileOwner)
+                throw new IllegalStateException("Cannot manage permissions without being profile owner");
+            return mPolicyManager.setPermissionGrantState(mAdminComponent, packageName, permission, grantState);
+        }
+
+        @Override
+        public void setLocationRestriction(boolean blocked) {
+            if (!mIsProfileOwner)
+                throw new IllegalStateException("Cannot manage restrictions without being profile owner");
+            if (blocked) {
+                mPolicyManager.addUserRestriction(mAdminComponent, UserManager.DISALLOW_SHARE_LOCATION);
+            } else {
+                mPolicyManager.clearUserRestriction(mAdminComponent, UserManager.DISALLOW_SHARE_LOCATION);
+            }
         }
     };
 

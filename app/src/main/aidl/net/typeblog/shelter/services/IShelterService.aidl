@@ -28,4 +28,9 @@ interface IShelterService {
     void setStartActivityProxy(in IStartActivityProxy proxy);
     List<String> getCrossProfilePackages();
     void setCrossProfilePackages(in List<String> packages);
+
+    // Permission management for apps in work profile
+    int getPermissionGrantState(String packageName, String permission);
+    boolean setPermissionGrantState(String packageName, String permission, int grantState);
+    void setLocationRestriction(boolean blocked);
 }

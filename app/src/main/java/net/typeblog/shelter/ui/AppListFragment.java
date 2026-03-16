@@ -1,6 +1,8 @@
 package net.typeblog.shelter.ui;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -55,6 +57,8 @@ public class AppListFragment extends BaseFragment {
     private static final int MENU_ITEM_AUTO_FREEZE = 10007;
     private static final int MENU_ITEM_ALLOW_CROSS_PROFILE_WIDGET = 10008;
     private static final int MENU_ITEM_ALLOW_CROSS_PROFILE_INTERACTION = 10009;
+    private static final int MENU_ITEM_BLOCK_LOCATION = 10010;
+    private static final int MENU_ITEM_BLOCK_CONTACTS_ACCESS = 10011;
 
     private IShelterService mService = null;
     private boolean mIsRemote = false;
@@ -291,6 +295,18 @@ public class AppListFragment extends BaseFragment {
             autoFreeze.setChecked(
                     LocalStorageManager.getInstance().stringListContains(
                             LocalStorageManager.PREF_AUTO_FREEZE_LIST_WORK_PROFILE, mSelectedApp.getPackageName()));
+
+            // Permission blocking menu items
+            MenuItem blockLocation = menu.add(Menu.NONE, MENU_ITEM_BLOCK_LOCATION, Menu.NONE, R.string.block_location);
+            blockLocation.setCheckable(true);
+            blockLocation.setChecked(isPermissionDenied(mSelectedApp.getPackageName(),
+                    Manifest.permission.ACCESS_FINE_LOCATION));
+
+            MenuItem blockContacts = menu.add(Menu.NONE, MENU_ITEM_BLOCK_CONTACTS_ACCESS, Menu.NONE, R.string.block_contacts_access);
+            blockContacts.setCheckable(true);
+            blockContacts.setChecked(isPermissionDenied(mSelectedApp.getPackageName(),
+                    Manifest.permission.READ_CONTACTS));
+
             menu.add(Menu.NONE, MENU_ITEM_CREATE_UNFREEZE_SHORTCUT, Menu.NONE, R.string.create_unfreeze_shortcut);
         } else {
             menu.add(Menu.NONE, MENU_ITEM_CLONE, Menu.NONE, R.string.clone_to_work_profile);
@@ -413,6 +429,24 @@ public class AppListFragment extends BaseFragment {
                 }
                 return true;
             }
+            case MENU_ITEM_BLOCK_LOCATION: {
+                boolean shouldBlock = !item.isChecked();
+                toggleLocationPermissions(mSelectedApp.getPackageName(), shouldBlock);
+                item.setChecked(shouldBlock);
+                Toast.makeText(getContext(),
+                        getString(shouldBlock ? R.string.location_blocked : R.string.location_unblocked,
+                                mSelectedApp.getLabel()), Toast.LENGTH_SHORT).show();
+                return true;
+            }
+            case MENU_ITEM_BLOCK_CONTACTS_ACCESS: {
+                boolean shouldBlock = !item.isChecked();
+                toggleContactsPermissions(mSelectedApp.getPackageName(), shouldBlock);
+                item.setChecked(shouldBlock);
+                Toast.makeText(getContext(),
+                        getString(shouldBlock ? R.string.contacts_blocked : R.string.contacts_unblocked,
+                                mSelectedApp.getLabel()), Toast.LENGTH_SHORT).show();
+                return true;
+            }
         }
 
         return super.onContextItemSelected(item);
@@ -462,6 +496,49 @@ public class AppListFragment extends BaseFragment {
                     runOnUiThread(() -> addUnfreezeShortcut(app, linkedApps, icon));
                 }
             });
+        } catch (RemoteException e) {
+            // Ignore
+        }
+    }
+
+    private boolean isPermissionDenied(String packageName, String permission) {
+        try {
+            return mService.getPermissionGrantState(packageName, permission)
+                    == DevicePolicyManager.PERMISSION_GRANT_STATE_DENIED;
+        } catch (RemoteException e) {
+            return false;
+        }
+    }
+
+    private void toggleLocationPermissions(String packageName, boolean block) {
+        int state = block
+                ? DevicePolicyManager.PERMISSION_GRANT_STATE_DENIED
+                : DevicePolicyManager.PERMISSION_GRANT_STATE_DEFAULT;
+        try {
+            mService.setPermissionGrantState(packageName,
+                    Manifest.permission.ACCESS_FINE_LOCATION, state);
+            mService.setPermissionGrantState(packageName,
+                    Manifest.permission.ACCESS_COARSE_LOCATION, state);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                mService.setPermissionGrantState(packageName,
+                        Manifest.permission.ACCESS_BACKGROUND_LOCATION, state);
+            }
+        } catch (RemoteException e) {
+            // Ignore
+        }
+    }
+
+    private void toggleContactsPermissions(String packageName, boolean block) {
+        int state = block
+                ? DevicePolicyManager.PERMISSION_GRANT_STATE_DENIED
+                : DevicePolicyManager.PERMISSION_GRANT_STATE_DEFAULT;
+        try {
+            mService.setPermissionGrantState(packageName,
+                    Manifest.permission.READ_CONTACTS, state);
+            mService.setPermissionGrantState(packageName,
+                    Manifest.permission.WRITE_CONTACTS, state);
+            mService.setPermissionGrantState(packageName,
+                    Manifest.permission.GET_ACCOUNTS, state);
         } catch (RemoteException e) {
             // Ignore
         }
