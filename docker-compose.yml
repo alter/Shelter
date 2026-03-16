@@ -7,6 +7,7 @@ services:
       - gradle-cache:/root/.gradle
     command: >
       bash -c "
+        git config --global --add safe.directory /project &&
         ./gradlew assembleDebug assembleRelease &&
         cp -v app/build/outputs/apk/debug/*.apk /output/ &&
         cp -v app/build/outputs/apk/release/*.apk /output/ 2>/dev/null;
