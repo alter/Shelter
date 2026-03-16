@@ -7,7 +7,7 @@ services:
       - gradle-cache:/root/.gradle
     command: >
       bash -c "
-        git config --global --add safe.directory /project &&
+        git config --global --add safe.directory '*' &&
         git submodule sync --recursive &&
         git submodule update --init --recursive &&
         ./gradlew assembleDebug assembleRelease &&
