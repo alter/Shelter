@@ -1,0 +1,17 @@
+services:
+  builder:
+    build: .
+    volumes:
+      - .:/project
+      - ./output:/output
+      - gradle-cache:/root/.gradle
+    command: >
+      bash -c "
+        ./gradlew assembleDebug assembleRelease &&
+        cp -v app/build/outputs/apk/debug/*.apk /output/ &&
+        cp -v app/build/outputs/apk/release/*.apk /output/ 2>/dev/null;
+        echo 'Done. APKs copied to ./output/'
+      "
+
+volumes:
+  gradle-cache:
