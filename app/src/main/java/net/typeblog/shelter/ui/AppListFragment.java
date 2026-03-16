@@ -1,11 +1,9 @@
 package net.typeblog.shelter.ui;
 
 import android.app.Activity;
-import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
@@ -26,7 +24,6 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.view.ActionMode;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -48,8 +45,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class AppListFragment extends BaseFragment {
-    static final String BROADCAST_REFRESH = "net.typeblog.shelter.broadcast.REFRESH";
-
     // Menu Items
     private static final int MENU_ITEM_CLONE = 10001;
     private static final int MENU_ITEM_UNINSTALL = 10002;
@@ -82,36 +77,6 @@ public class AppListFragment extends BaseFragment {
     // Variable to store the current action mode object if any
     private ActionMode mActionMode = null;
 
-    // Receiver for Refresh events
-    // used for app changes
-    private BroadcastReceiver mRefreshReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            refresh();
-        }
-    };
-
-    // Receiver for context menu closed event
-    private BroadcastReceiver mContextMenuClosedReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            mSelectedApp = null;
-        }
-    };
-
-    // Receiver for search event
-    private BroadcastReceiver mSearchReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String query = intent.getStringExtra("text");
-            if ("".equals(query)) {
-                // Consider empty query as null
-                query = null;
-            }
-            mAdapter.setSearchQuery(query);
-        }
-    };
-
     static AppListFragment newInstance(IShelterService service, boolean isRemote) {
         AppListFragment fragment = new AppListFragment();
         Bundle args = new Bundle();
@@ -133,14 +98,7 @@ public class AppListFragment extends BaseFragment {
     @Override
     public void onResume() {
         super.onResume();
-        LocalBroadcastManager.getInstance(getContext())
-                .registerReceiver(mRefreshReceiver, new IntentFilter(BROADCAST_REFRESH));
-        LocalBroadcastManager.getInstance(getContext())
-                .registerReceiver(mContextMenuClosedReceiver,
-                        new IntentFilter(MainActivity.BROADCAST_CONTEXT_MENU_CLOSED));
-        LocalBroadcastManager.getInstance(getContext())
-                .registerReceiver(mSearchReceiver,
-                        new IntentFilter(MainActivity.BROADCAST_SEARCH_FILTER_CHANGED));
+        ((MainActivity) getActivity()).registerFragmentListener(this);
         refresh();
     }
 
@@ -148,12 +106,22 @@ public class AppListFragment extends BaseFragment {
     public void onPause() {
         super.onPause();
         mSelectedApp = null;
-        LocalBroadcastManager.getInstance(getContext())
-                .unregisterReceiver(mRefreshReceiver);
-        LocalBroadcastManager.getInstance(getContext())
-                .unregisterReceiver(mContextMenuClosedReceiver);
-        LocalBroadcastManager.getInstance(getContext())
-                .unregisterReceiver(mSearchReceiver);
+        ((MainActivity) getActivity()).unregisterFragmentListener(this);
+    }
+
+    // Called by MainActivity when context menu is closed
+    void onContextMenuClosed() {
+        mSelectedApp = null;
+    }
+
+    // Called by MainActivity when search filter changes
+    void onSearchFilterChanged(String query) {
+        if ("".equals(query)) {
+            query = null;
+        }
+        if (mAdapter != null) {
+            mAdapter.setSearchQuery(query);
+        }
     }
 
     @Nullable
@@ -477,8 +445,7 @@ public class AppListFragment extends BaseFragment {
             String message = getString(isInstall ? R.string.clone_success : R.string.uninstall_success);
             message = String.format(message, app.getLabel());
             Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
-            LocalBroadcastManager.getInstance(getContext())
-                    .sendBroadcast(new Intent(BROADCAST_REFRESH));
+            ((MainActivity) getActivity()).notifyFragmentsRefresh();
         } else if (result == ShelterService.RESULT_CANNOT_INSTALL_SYSTEM_APP) {
             Toast.makeText(getContext(),
                     getString(isInstall ? R.string.clone_fail_system_app :
