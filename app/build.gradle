@@ -29,6 +29,14 @@ def getVersionName = { ->
 }
 
 android {
+    signingConfigs {
+        release {
+            storeFile file('../keystore.jks')
+            storePassword 'shelter123'
+            keyAlias 'shelter'
+            keyPassword 'shelter123'
+        }
+    }
     compileSdk 36
     buildToolsVersion = '36.0.0'
     defaultConfig {
@@ -41,6 +49,7 @@ android {
     }
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
