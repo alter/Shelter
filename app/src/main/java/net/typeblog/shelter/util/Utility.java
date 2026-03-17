@@ -86,7 +86,12 @@ public class Utility {
 
     public static void transferIntentToProfileUnsigned(Context context, Intent intent) {
         PackageManager pm = context.getPackageManager();
-        List<ResolveInfo> info = pm.queryIntentActivities(intent, 0);
+        List<ResolveInfo> info;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            info = pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0));
+        } else {
+            info = pm.queryIntentActivities(intent, 0);
+        }
         Optional<ResolveInfo> i = info.stream()
                 .filter((r) -> !r.activityInfo.packageName.equals(context.getPackageName()))
                 .findFirst();
@@ -336,10 +341,14 @@ public class Utility {
                 MediaStore.MediaColumns.DATA + " LIKE ? ",
                 new String[]{path}, null);
         if (cursor == null || cursor.getCount() == 0) {
+            if (cursor != null) cursor.close();
             return -1;
         } else {
             cursor.moveToFirst();
-            return cursor.getInt(cursor.getColumnIndex(MediaStore.MediaColumns._ID));
+            int columnIndex = cursor.getColumnIndex(MediaStore.MediaColumns._ID);
+            int result = columnIndex >= 0 ? cursor.getInt(columnIndex) : -1;
+            cursor.close();
+            return result;
         }
     }
 

@@ -23,6 +23,19 @@ Features
 - Installing apps inside a work profile for isolation
 - "Freeze" apps inside the work profile to prevent them from running or being woken up when you are not actively using them
 - Installing two copies of the same app on the same device
+- Per-app permission blocking for location and contacts in the work profile
+
+Building
+===
+
+A Docker build environment is included for reproducible builds:
+
+```bash
+docker build -t shelter-builder .
+docker run --rm -v "$PWD":/workspace shelter-builder
+```
+
+A self-signed release keystore (`keystore.jks`) is included in the repo so the build produces signed APKs out of the box.
 
 Discussion & Support
 ===

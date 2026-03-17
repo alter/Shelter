@@ -52,6 +52,12 @@
     <string name="auto_freeze">Auto Freeze</string>
     <string name="allow_cross_profile_widgets">Allow Widgets in Main Profile</string>
     <string name="allow_cross_profile_interaction">Allow Cross-Profile Interaction</string>
+    <string name="block_location">Block Location (GPS/Cell)</string>
+    <string name="block_contacts_access">Block Contacts Access</string>
+    <string name="location_blocked">Location access blocked for \"%s\"</string>
+    <string name="location_unblocked">Location access restored for \"%s\"</string>
+    <string name="contacts_blocked">Contacts access blocked for \"%s\"</string>
+    <string name="contacts_unblocked">Contacts access restored for \"%s\"</string>
 
     <!-- Action Bar Options Menu -->
     <string name="search">Search</string>

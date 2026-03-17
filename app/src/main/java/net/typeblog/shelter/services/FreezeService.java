@@ -12,6 +12,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Build;
 import android.os.IBinder;
 
 import androidx.annotation.Nullable;
@@ -74,9 +75,17 @@ public class FreezeService extends Service {
             mAlarmManager.set(AlarmManager.RTC_WAKEUP,
                     System.currentTimeMillis() + ((long) SettingsManager.getInstance().getAutoFreezeDelay()) * 1000,
                     null, mFreezeWork, null);
-            registerReceiver(mUnlockReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(mUnlockReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON), RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(mUnlockReceiver, new IntentFilter(Intent.ACTION_SCREEN_ON));
+            }
+            mUnlockReceiverRegistered = true;
         }
     };
+
+    // Track whether mUnlockReceiver is currently registered
+    private boolean mUnlockReceiverRegistered = false;
 
     // The receiver of the screen-on event
     // Cancels the freeze job if the designated delay has not passed
@@ -84,6 +93,7 @@ public class FreezeService extends Service {
         @Override
         public void onReceive(Context context, Intent intent) {
             mAlarmManager.cancel(mFreezeWork);
+            safeUnregisterUnlockReceiver();
         }
     };
 
@@ -102,7 +112,7 @@ public class FreezeService extends Service {
     private AlarmManager.OnAlarmListener mFreezeWork = () -> {
         synchronized (FreezeService.class) {
             // Cancel the unlock receiver first - the delay has passed if this work is executed
-            unregisterReceiver(mUnlockReceiver);
+            safeUnregisterUnlockReceiver();
 
             if (sAppToFreeze.size() > 0) {
                 DevicePolicyManager dpm = getSystemService(DevicePolicyManager.class);
@@ -131,7 +141,11 @@ public class FreezeService extends Service {
         super.onCreate();
         mAlarmManager = getSystemService(AlarmManager.class);
         // This is the only thing that we do
-        registerReceiver(mLockReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(mLockReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF), RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(mLockReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+        }
         // Use foreground notification to keep this service alive until screen is locked
         setForeground();
     }
@@ -139,7 +153,20 @@ public class FreezeService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        mAlarmManager.cancel(mFreezeWork);
+        safeUnregisterUnlockReceiver();
         unregisterReceiver(mLockReceiver);
+    }
+
+    private void safeUnregisterUnlockReceiver() {
+        if (mUnlockReceiverRegistered) {
+            try {
+                unregisterReceiver(mUnlockReceiver);
+            } catch (IllegalArgumentException e) {
+                // Receiver was already unregistered
+            }
+            mUnlockReceiverRegistered = false;
+        }
     }
 
     @Nullable

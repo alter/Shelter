@@ -1,3 +1,28 @@
+2.0 (WIP)
+===
+
+### Android 16 / OxygenOS 16 support
+- Updated targetSDK to 36 (Android 16) for OxygenOS 16 / OnePlus 12 compatibility.
+- Fixed Intent redirection hardening and scoped storage permissions for Android 16.
+
+### Security fixes
+- Fixed path traversal vulnerability in file handling.
+- Fixed memory leaks and improved sandbox hardening.
+
+### Dependency updates
+- Updated Gradle to 8.11.1, AGP to 8.7.3.
+- Bumped appcompat to 1.7.1, test runner to 1.7.0, espresso to 3.7.0.
+- Replaced deprecated `LocalBroadcastManager` with `LiveData`.
+- Added missing `androidx.swiperefreshlayout` dependency.
+
+### New features
+- Per-app permission blocking for location and contacts in the work profile.
+
+### Build & infrastructure
+- Added Docker build environment for reproducible Android builds.
+- Included self-signed release keystore in the repo for out-of-the-box signed builds.
+- Fixed multiple Docker build issues (git safe.directory, submodule init, submodule URL migration to GitHub).
+
 1.9.1 (445)
 ===
 

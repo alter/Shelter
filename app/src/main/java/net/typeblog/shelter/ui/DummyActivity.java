@@ -216,7 +216,26 @@ public class DummyActivity extends Activity {
 
             switch (status) {
                 case PackageInstaller.STATUS_PENDING_USER_ACTION:
-                    startActivity((Intent) intent.getExtras().get(Intent.EXTRA_INTENT));
+                    Intent confirmIntent;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        confirmIntent = intent.getExtras().getParcelable(Intent.EXTRA_INTENT, Intent.class);
+                    } else {
+                        confirmIntent = (Intent) intent.getExtras().get(Intent.EXTRA_INTENT);
+                    }
+                    // Android 16 (API 36) introduces Intent redirection security hardening
+                    // that blocks launching sub-intents from extras by default.
+                    // PackageInstaller confirmation intents are legitimate and need opt-out.
+                    if (Build.VERSION.SDK_INT >= 36 && confirmIntent != null) {
+                        try {
+                            confirmIntent.getClass().getDeclaredMethod("removeLaunchSecurityProtection")
+                                    .invoke(confirmIntent);
+                        } catch (Exception ignored) {
+                            // Method may not exist on all implementations
+                        }
+                    }
+                    if (confirmIntent != null) {
+                        startActivity(confirmIntent);
+                    }
                     break;
                 case PackageInstaller.STATUS_SUCCESS:
                     appInstallFinished(Activity.RESULT_OK);
@@ -324,7 +343,11 @@ public class DummyActivity extends Activity {
                 // The APK will be an Uri from our own FileProviderProxy
                 // which points to an opened Fd in another profile.
                 // We must close the Fd when we finish.
-                uri = getIntent().getParcelableExtra("direct_install_apk");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    uri = getIntent().getParcelableExtra("direct_install_apk", Uri.class);
+                } else {
+                    uri = getIntent().getParcelableExtra("direct_install_apk");
+                }
             }
 
             // A permissive VmPolicy must be set to work around

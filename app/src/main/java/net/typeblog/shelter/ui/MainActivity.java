@@ -14,6 +14,9 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultLauncher;
@@ -23,7 +26,6 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
 import androidx.fragment.app.Fragment;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 import androidx.viewpager2.widget.ViewPager2;
 
@@ -41,8 +43,36 @@ import net.typeblog.shelter.util.UriForwardProxy;
 import net.typeblog.shelter.util.Utility;
 
 public class MainActivity extends AppCompatActivity {
-    public static final String BROADCAST_CONTEXT_MENU_CLOSED = "net.typeblog.shelter.broadcast.CONTEXT_MENU_CLOSED";
-    public static final String BROADCAST_SEARCH_FILTER_CHANGED = "net.typeblog.shelter.broadcast.SEARCH_FILTER_CHANGED";
+    // List of registered fragment listeners for direct communication
+    private final List<AppListFragment> mFragmentListeners = new ArrayList<>();
+
+    void registerFragmentListener(AppListFragment fragment) {
+        if (!mFragmentListeners.contains(fragment)) {
+            mFragmentListeners.add(fragment);
+        }
+    }
+
+    void unregisterFragmentListener(AppListFragment fragment) {
+        mFragmentListeners.remove(fragment);
+    }
+
+    void notifyFragmentsRefresh() {
+        for (AppListFragment f : mFragmentListeners) {
+            f.refresh();
+        }
+    }
+
+    private void notifyFragmentsContextMenuClosed() {
+        for (AppListFragment f : mFragmentListeners) {
+            f.onContextMenuClosed();
+        }
+    }
+
+    private void notifyFragmentsSearchFilterChanged(String query) {
+        for (AppListFragment f : mFragmentListeners) {
+            f.onSearchFilterChanged(query);
+        }
+    }
 
     private final ActivityResultLauncher<Void> mStartSetup =
             registerForActivityResult(new SetupWizardActivity.SetupWizardContract(), this::setupWizardCb);
@@ -369,10 +399,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public boolean onQueryTextChange(String newText) {
-                Intent intent = new Intent(BROADCAST_SEARCH_FILTER_CHANGED);
-                intent.putExtra("text", newText.toLowerCase().trim());
-                LocalBroadcastManager.getInstance(MainActivity.this)
-                        .sendBroadcast(intent);
+                notifyFragmentsSearchFilterChanged(newText.toLowerCase().trim());
                 return true;
             }
         });
@@ -382,8 +409,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onContextMenuClosed(Menu menu) {
         super.onContextMenuClosed(menu);
-        LocalBroadcastManager.getInstance(this)
-                .sendBroadcast(new Intent(BROADCAST_CONTEXT_MENU_CLOSED));
+        notifyFragmentsContextMenuClosed();
     }
 
     @Override
@@ -418,8 +444,7 @@ public class MainActivity extends AppCompatActivity {
             Runnable update = () -> {
                 mShowAll = !item.isChecked();
                 item.setChecked(mShowAll);
-                LocalBroadcastManager.getInstance(this)
-                        .sendBroadcast(new Intent(AppListFragment.BROADCAST_REFRESH));
+                notifyFragmentsRefresh();
             };
 
             if (!item.isChecked()) {

@@ -68,14 +68,25 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
     @Override
     public void onCreatePreferences(Bundle bundle, String s) {
         addPreferencesFromResource(R.xml.preferences_settings);
-        mServiceWork = IShelterService.Stub.asInterface(
-                ((Bundle) getActivity().getIntent().getParcelableExtra("extras")).getBinder("profile_service"));
+        Bundle extras;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            extras = getActivity().getIntent().getParcelableExtra("extras", Bundle.class);
+        } else {
+            extras = getActivity().getIntent().getParcelableExtra("extras");
+        }
+        mServiceWork = IShelterService.Stub.asInterface(extras.getBinder("profile_service"));
 
         // Set the displayed version
         try {
-            findPreference(SETTINGS_VERSION).setSummary(
-                    getContext().getPackageManager().getPackageInfo(
-                            getContext().getPackageName(), 0).versionName);
+            String versionName;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                versionName = getContext().getPackageManager().getPackageInfo(
+                        getContext().getPackageName(), PackageManager.PackageInfoFlags.of(0)).versionName;
+            } else {
+                versionName = getContext().getPackageManager().getPackageInfo(
+                        getContext().getPackageName(), 0).versionName;
+            }
+            findPreference(SETTINGS_VERSION).setSummary(versionName);
         } catch (PackageManager.NameNotFoundException e) {
             // WTF?
         }
